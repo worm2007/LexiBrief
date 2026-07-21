@@ -8,7 +8,6 @@ import {
   MessageSquare,
   Send,
   Loader2,
-  CheckCircle
 } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 
