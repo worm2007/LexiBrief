@@ -31,7 +31,7 @@ function App() {
     formData.append("file", files[0]);
 
     const upload = await axios.post(
-      "http://localhost:8000/upload",
+      "https://lexibrief-backend.onrender.com",
       formData
     );
 
@@ -41,7 +41,7 @@ function App() {
     const [summary, clauses, risks] =
       await Promise.all([
         axios.post(
-          "http://localhost:8000/analyze",
+          "https://lexibrief-backend.onrender.com",
           {
             doc_id:id,
             type:"summary"
@@ -49,7 +49,7 @@ function App() {
         ),
 
         axios.post(
-          "http://localhost:8000/analyze",
+          "https://lexibrief-backend.onrender.com",
           {
             doc_id:id,
             type:"clauses"
@@ -57,7 +57,7 @@ function App() {
         ),
 
         axios.post(
-          "http://localhost:8000/analyze",
+          "https://lexibrief-backend.onrender.com",
           {
             doc_id:id,
             type:"risks"
@@ -79,7 +79,7 @@ function App() {
 
     const res =
     await axios.post(
-      `http://localhost:8000/chat?doc_id=${docId}&query=${query}`
+      `https://lexibrief-backend.onrender.com`
     );
 
     setChat([
