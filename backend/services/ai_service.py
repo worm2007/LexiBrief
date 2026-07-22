@@ -7,7 +7,7 @@ import re
 class LegalAIService:
     def __init__(self):
         self.llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-2.5-flash-lite",
     temperature=0
 )
 
