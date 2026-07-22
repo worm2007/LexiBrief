@@ -1,15 +1,17 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-import re
-
+from dotenv import load_dotenv
+load_dotenv()
+import os
 class LegalAIService:
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-lite",
-    temperature=0
-)
+      self.llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    groq_api_key=os.getenv("GROQ_API_KEY")
+      )
+
 
 
     async def analyze_document(self, context, analysis_type):
