@@ -6,474 +6,265 @@ from dotenv import load_dotenv
 
 import os
 import re
-
+import json
 
 load_dotenv()
 
 
-
-# ---------------------------------
-# LLM Configuration
-# ---------------------------------
+# ----------------------------
+# LLM
+# ----------------------------
 
 def get_llm():
-
     return ChatGroq(
-
         model="llama-3.1-8b-instant",
-
         groq_api_key=os.getenv("GROQ_API_KEY"),
-
         temperature=0.2
-
     )
 
 
-
-
-
-# ---------------------------------
-# Legal AI Service
-# ---------------------------------
+# ----------------------------
+# AI Service
+# ----------------------------
 
 class LegalAIService:
 
-
     def __init__(self):
-
         self.llm = get_llm()
 
 
-
-
-
-    async def analyze_document(
-        self,
-        context,
-        analysis_type
-    ):
-
+    async def analyze_document(self, context, analysis_type):
 
         prompts = {
 
+            "summary": """
+You are Lexi Brief, a senior legal document analyst.
 
-            # =========================
-            # SUMMARY
-            # =========================
+Create a professional contract review.
 
-            "summary":
-
-            """
-
-You are Lexi, a professional AI legal document analyst.
-
-Create a clean professional contract report.
-
-Rules:
-
-- Use simple professional language.
-- Do not use markdown symbols.
-- Do not repeat information.
-- If information is missing write:
-Not specified in document.
-
-
-Format:
-
+Use these headings:
 
 EXECUTIVE SUMMARY
 
-Brief overview of the agreement.
-
-
 PARTIES INVOLVED
-
-Client:
-Other Party:
-
 
 DOCUMENT PURPOSE
 
-Purpose of agreement.
+IMPORTANT DATES
 
-
-KEY DATES
-
-Effective Date:
-Expiry/Termination Date:
-
-
-FINANCIAL TERMS
-
-Payment:
-Payment Schedule:
-Other obligations:
-
+PAYMENT TERMS
 
 CONFIDENTIALITY
 
-Explain confidentiality obligations.
+LIABILITY
 
-
-LIABILITY AND INDEMNITY
-
-Explain responsibilities and limitations.
-
-
-TERMINATION TERMS
-
-Explain termination conditions.
-
+TERMINATION
 
 KEY OBSERVATIONS
 
-Important points user should know.
+Write professionally.
+Do NOT use markdown.
+Do NOT repeat information.
 
-
-
-Document:
-
-{context}
-
-""",
-
-
-
-
-
-            # =========================
-            # CLAUSES
-            # =========================
-
-            "clauses":
-
-            """
-
-You are Lexi, an expert contract reviewer.
-
-
-Extract important clauses.
-
-
-Format:
-
-
-CONFIDENTIALITY CLAUSE
-
-Purpose:
-Explanation:
-Risk:
-
-
-INDEMNIFICATION CLAUSE
-
-Purpose:
-Explanation:
-Risk:
-
-
-FORCE MAJEURE CLAUSE
-
-Purpose:
-Explanation:
-Risk:
-
-
-INTELLECTUAL PROPERTY CLAUSE
-
-Purpose:
-Explanation:
-Risk:
-
-
-GOVERNING LAW
-
-Purpose:
-Explanation:
-Risk:
-
-
-TERMINATION CLAUSE
-
-Purpose:
-Explanation:
-Risk:
-
-
-
-Rules:
-
-- Explain for normal users.
-- Do not invent clauses.
-- If missing say:
-Not found in document.
-
+If something is missing write:
+"Not specified in document."
 
 Document:
 
 {context}
-
 """,
 
+            "clauses": """
+You are Lexi Brief.
 
+Extract the major legal clauses.
 
+For each clause include
 
+Clause Name
 
-            # =========================
-            # RISKS
-            # =========================
+Purpose
 
-            "risks":
+Simple Explanation
 
-            """
+Potential Concern
 
-You are Lexi, a professional contract risk analyst.
+Include
 
+Confidentiality
 
-Analyze the legal document.
+Indemnification
+
+Force Majeure
+
+Intellectual Property
+
+Termination
+
+Dispute Resolution
+
+Only use document information.
+
+Document:
+
+{context}
+""",
+
+            "risks": """
+You are an expert legal risk analyst.
+
+Analyze the document.
 
 Return ONLY valid JSON.
 
-Do not add markdown.
-Do not add explanations outside JSON.
+Use exactly these keys.
 
+risk_score
+risk_level
+high_risks
+medium_risks
+low_risks
+summary
 
-Use exactly this structure:
+Example format
 
+{{
+  "risk_score":72,
+  "risk_level":"Medium",
+  "high_risks":[
+    {{
+      "issue":"Unlimited liability",
+      "impact":"Financial exposure",
+      "recommendation":"Negotiate liability cap"
+    }}
+  ],
+  "medium_risks":[
+    {{
+      "issue":"Termination notice",
+      "impact":"Business disruption",
+      "recommendation":"Increase notice period"
+    }}
+  ],
+  "low_risks":[
+    {{
+      "issue":"Minor ambiguity",
+      "impact":"Low impact"
+    }}
+  ],
+  "summary":"Overall moderate risk."
+}}
 
-{
- "risk_score": 0,
- "risk_level": "",
- "high_risks": [
-   {
-    "issue":"",
-    "impact":"",
-    "recommendation":""
-   }
- ],
- "medium_risks": [
-   {
-    "issue":"",
-    "impact":"",
-    "recommendation":""
-   }
- ],
- "low_risks": [
-   {
-    "issue":"",
-    "impact":""
-   }
- ],
- "summary":""
-}
-
-
-
-Rules:
-
-- risk_score must be between 0 and 100.
-- 0 means very safe.
-- 100 means very risky.
-- Only use information from the document.
-- Do not provide legal advice.
-
+Return ONLY JSON.
 
 Document:
 
 {context}
-
 """
-
         }
 
-
-
-
-        if analysis_type not in prompts:
-
-            return "Invalid analysis type"
-
-
-
-
         prompt = ChatPromptTemplate.from_template(
-
             prompts[analysis_type]
-
         )
-
-
 
         chain = prompt | self.llm
 
+        response = await chain.ainvoke({
+            "context": context
+        })
+
+        text = response.content.strip()
+
+        # Make sure JSON is valid
+        if analysis_type == "risks":
+
+            try:
+                json.loads(text)
+                return text
+
+            except Exception:
+
+                fallback = {
+                    "risk_score": 50,
+                    "risk_level": "Medium",
+                    "high_risks": [],
+                    "medium_risks": [],
+                    "low_risks": [],
+                    "summary": text
+                }
+
+                return json.dumps(fallback)
+
+        return text
 
 
-        response = await chain.ainvoke(
-
-            {
-                "context":context
-            }
-
-        )
-
-
-
-        return response.content
-
-
-
-
-
-
-    # ---------------------------------
-    # AI Lawyer Chat
-    # ---------------------------------
-
-    async def ask_question(
-        self,
-        context,
-        query
-    ):
-
+    async def ask_question(self, context, query):
 
         prompt = ChatPromptTemplate.from_template(
-
             """
+You are Lexi Brief AI.
 
-You are Lexi, an AI legal assistant.
+If document context exists,
+answer ONLY from the document.
 
+If no document context exists,
+answer as a professional legal assistant.
 
-Answer the user's question.
+Never invent clauses.
 
+Explain legal concepts in simple English.
 
-Rules:
+Mention this is not legal advice whenever appropriate.
 
-- Use document context when available.
-- For general questions answer normally.
-- Explain legal terms simply.
-- Mention risks when required.
-- Do not claim to be a human lawyer.
-- Do not create fake information.
-
-
-
-Document Context:
+Document:
 
 {context}
-
-
 
 Question:
 
 {query}
-
-
-
-Answer:
-
 """
-
         )
-
-
 
         chain = prompt | self.llm
 
-
-
-        response = await chain.ainvoke(
-
-            {
-
-            "context":context,
-
-            "query":query
-
-            }
-
-        )
-
-
+        response = await chain.ainvoke({
+            "context": context,
+            "query": query
+        })
 
         return response.content
 
 
-
-
-
-
-# ---------------------------------
-# Document Chunking
-# ---------------------------------
+# ----------------------------
+# Chunk PDF
+# ----------------------------
 
 def chunk_legal_document(text):
 
-
-    pages = re.split(
-
-        r'--- PAGE (\d+) ---',
-
-        text
-
-    )
-
-
-    documents = []
-
-
+    pages = re.split(r'--- PAGE (\d+) ---', text)
 
     splitter = RecursiveCharacterTextSplitter(
-
-        chunk_size=1000,
-
-        chunk_overlap=150
-
+        chunk_size=1200,
+        chunk_overlap=200
     )
 
+    docs = []
 
+    for i in range(1, len(pages), 2):
 
-    for i in range(
+        page = pages[i]
 
-        1,
-
-        len(pages),
-
-        2
-
-    ):
-
-
-        page_number = pages[i]
-
-
-
-        chunks = splitter.split_text(
-
-            pages[i+1]
-
-        )
-
-
+        chunks = splitter.split_text(pages[i + 1])
 
         for chunk in chunks:
 
-
-            documents.append(
-
+            docs.append(
                 Document(
-
                     page_content=chunk,
-
                     metadata={
-
-                        "page":page_number
-
+                        "page": page
                     }
-
                 )
-
             )
 
-
-
-    return documents
+    return docs
