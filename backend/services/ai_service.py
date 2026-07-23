@@ -238,7 +238,6 @@ Question:
 # ----------------------------
 # Chunk PDF
 # ----------------------------
-
 def chunk_legal_document(text):
 
     pages = re.split(r'--- PAGE (\d+) ---', text)
@@ -254,17 +253,28 @@ def chunk_legal_document(text):
 
         page = pages[i]
 
-        chunks = splitter.split_text(pages[i + 1])
+        # Prevent IndexError
+        if i + 1 >= len(pages):
+            continue
+
+        page_text = pages[i + 1].strip()
+
+        if not page_text:
+            continue
+
+        chunks = splitter.split_text(page_text)
 
         for chunk in chunks:
-
             docs.append(
                 Document(
                     page_content=chunk,
                     metadata={
-                        "page": page
+                        "page": int(page)
                     }
                 )
             )
 
     return docs
+
+
+    
