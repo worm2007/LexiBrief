@@ -5,6 +5,7 @@ from langchain_core.documents import Document
 from dotenv import load_dotenv
 load_dotenv()
 import os
+import re
 class LegalAIService:
     def __init__(self):
       self.llm = ChatGroq(
