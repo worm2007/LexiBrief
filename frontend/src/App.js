@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import axios from "axios";
-import LawyerChat from "./LawyerChat";
+
+import LawyerChat from "./components/LawyerChat";
+import Header from "./components/Header";
+import RiskScore from "./components/RiskScore";
 
 import {
   Upload,
@@ -16,31 +19,42 @@ import { useDropzone } from "react-dropzone";
 
 function App() {
 
+
   const [docId, setDocId] = useState(null);
+
   const [loading, setLoading] = useState(false);
 
 
   const [results, setResults] = useState({
-    summary: "",
-    clauses: "",
-    risks: ""
-  });
+
+    summary:"",
+    clauses:"",
+    risks:"",
+    riskScore:0,
+    riskLevel:""
+
+});
 
 
 
-  const uploadDocument = async (files) => {
+  const uploadDocument = async(files)=>{
 
-    try {
+
+    try{
+
 
       setLoading(true);
 
 
+
       const formData = new FormData();
+
 
       formData.append(
         "file",
         files[0]
       );
+
 
 
       const upload = await axios.post(
@@ -50,12 +64,15 @@ function App() {
         formData,
 
         {
+
           headers:{
             "Content-Type":"multipart/form-data"
           }
+
         }
 
       );
+
 
 
       const id = upload.data.document_id;
@@ -65,15 +82,20 @@ function App() {
 
 
 
+
       const [summary, clauses, risks] = await Promise.all([
 
 
         axios.post(
+
           "https://lexibrief-backend.onrender.com/analyze",
 
           {
+
             doc_id:id,
+
             type:"summary"
+
           }
 
         ),
@@ -81,11 +103,15 @@ function App() {
 
 
         axios.post(
+
           "https://lexibrief-backend.onrender.com/analyze",
 
           {
+
             doc_id:id,
+
             type:"clauses"
+
           }
 
         ),
@@ -93,11 +119,15 @@ function App() {
 
 
         axios.post(
+
           "https://lexibrief-backend.onrender.com/analyze",
 
           {
+
             doc_id:id,
+
             type:"risks"
+
           }
 
         )
@@ -107,15 +137,46 @@ function App() {
 
 
 
-      setResults({
 
-        summary:summary.data.result,
+      let riskData = {};
 
-        clauses:clauses.data.result,
+try {
 
-        risks:risks.data.result
+    riskData = JSON.parse(
+        risks.data.result
+    );
 
-      });
+}
+
+catch(error){
+
+    console.log(
+        "Risk JSON parsing failed",
+        error
+    );
+
+    riskData = {
+        risk_score:0,
+        risk_level:"Unknown"
+    };
+
+}
+
+
+
+setResults({
+
+    summary:summary.data.result,
+
+    clauses:clauses.data.result,
+
+    risks:risks.data.result,
+
+    riskScore:riskData.risk_score,
+
+    riskLevel:riskData.risk_level
+
+});
 
 
 
@@ -123,20 +184,25 @@ function App() {
 
     catch(error){
 
+
       console.log(error);
 
       alert(
         "Document processing failed"
       );
 
+
     }
 
 
     finally{
 
+
       setLoading(false);
 
+
     }
+
 
 
   };
@@ -146,17 +212,30 @@ function App() {
 
 
   const {
+
     getRootProps,
+
     getInputProps
+
+
   } = useDropzone({
+
 
     onDrop:uploadDocument,
 
+
     accept:{
+
+
       "application/pdf":[
+
         ".pdf"
+
       ]
+
+
     }
+
 
   });
 
@@ -164,27 +243,51 @@ function App() {
 
 
 
+
 return (
 
-<div className="min-h-screen bg-slate-100 flex">
+<div className="
+min-h-screen
+bg-slate-100
+flex
+">
+
 
 
 {/* Sidebar */}
 
-<div className="w-72 bg-[#0B1F3A] text-white p-8">
+<div className="
+w-72
+bg-[#0B1F3A]
+text-white
+p-8
+">
 
 
-<div className="flex gap-3 items-center mb-10">
+<div className="
+flex
+gap-3
+items-center
+mb-10
+">
 
 
-<Scale 
+<Scale
+
 size={35}
+
 className="text-blue-400"
+
 />
 
 
-<h1 className="text-2xl font-bold">
+<h1 className="
+text-2xl
+font-bold
+">
+
 LexiBrief
+
 </h1>
 
 
@@ -193,57 +296,120 @@ LexiBrief
 
 
 <p className="text-slate-300">
+
 AI Legal Document Intelligence
+
 </p>
 
 
 
-<div className="mt-10 space-y-5">
+<div className="
+mt-10
+space-y-5
+">
 
 
 <div className="flex gap-3">
+
 <FileText/>
+
 Document Summary
+
 </div>
 
 
+
 <div className="flex gap-3">
+
 <ShieldAlert/>
+
 Risk Detection
+
 </div>
+
 
 
 <div className="flex gap-3">
+
 <MessageSquare/>
+
 AI Lawyer
+
+</div>
+
+
+
 </div>
 
 
 </div>
 
 
+
+
+
+
+
+{/* Main Dashboard */}
+
+
+<div className="
+flex-1
+p-10
+">
+
+
+
+<Header />
+
+
+
+<div className="
+mt-8
+">
+
+<RiskScore
+
+score={results.riskScore}
+
+level={results.riskLevel}
+
+/>
+
 </div>
 
 
 
 
 
-{/* Main */}
+<h2 className="
+text-4xl
+font-bold
+text-slate-800
+mt-10
+">
 
-<div className="flex-1 p-10">
-
-
-<h2 className="text-4xl font-bold text-slate-800">
 Legal AI Assistant
+
 </h2>
 
 
-<p className="text-slate-500 mt-2">
+
+<p className="
+text-slate-500
+mt-2
+">
+
 Upload contracts or ask Lexi any legal question
+
 </p>
 
 
 
+
+
+
+{/* Upload Box */}
 
 
 {!docId && (
@@ -252,6 +418,7 @@ Upload contracts or ask Lexi any legal question
 <div
 
 {...getRootProps()}
+
 
 className="
 mt-10
@@ -275,27 +442,53 @@ cursor-pointer
 
 
 <Upload
+
 size={60}
+
 className="mx-auto text-blue-600"
+
 />
 
 
-<h3 className="text-2xl font-semibold mt-5">
+
+
+<h3 className="
+text-2xl
+font-semibold
+mt-5
+">
+
 Upload Legal Document
+
 </h3>
 
 
-<p className="text-gray-500 mt-2">
+
+
+<p className="
+text-gray-500
+mt-2
+">
+
 Drag & drop PDF contract here
+
 </p>
 
 
 
+
 {
+
 loading &&
 
 <Loader2
-className="animate-spin mx-auto mt-5"
+
+className="
+animate-spin
+mx-auto
+mt-5
+"
+
 />
 
 }
@@ -313,33 +506,56 @@ className="animate-spin mx-auto mt-5"
 
 
 
+{/* Analysis Cards */}
+
+
 {docId && (
 
 
-<div className="grid grid-cols-3 gap-6 mt-10">
+<div className="
+grid
+grid-cols-3
+gap-6
+mt-10
+">
 
 
 
 <Card
+
 title="Executive Summary"
+
 icon={<FileText/>}
+
 text={results.summary}
+
 />
 
 
 
+
 <Card
+
 title="Important Clauses"
+
 icon={<Scale/>}
+
 text={results.clauses}
+
 />
 
 
 
+
+
 <Card
+
 title="Risk Analysis"
+
 icon={<ShieldAlert/>}
+
 text={results.risks}
+
 />
 
 
@@ -354,9 +570,13 @@ text={results.risks}
 
 
 
-{/* Hybrid AI Lawyer */}
 
-<div className="mt-10">
+{/* AI Lawyer */}
+
+
+<div className="
+mt-10
+">
 
 
 <LawyerChat
@@ -375,6 +595,8 @@ documentId={docId}
 </div>
 
 
+
+
 </div>
 
 
@@ -387,28 +609,30 @@ documentId={docId}
 
 
 
+
+
 function Card({
+
 title,
+
 icon,
+
 text
+
+
 }){
 
 
 return (
 
-<div
-
-className="
+<div className="
 bg-white
 rounded-3xl
 shadow-lg
 p-6
 h-96
 overflow-auto
-"
-
-
->
+">
 
 
 <div className="
@@ -430,17 +654,13 @@ mb-5
 
 
 
-<p
 
-className="
+<p className="
 text-sm
 leading-relaxed
 whitespace-pre-wrap
 text-slate-700
-"
-
-
->
+">
 
 {text}
 
@@ -449,7 +669,6 @@ text-slate-700
 
 
 </div>
-
 
 );
 

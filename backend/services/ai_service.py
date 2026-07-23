@@ -57,76 +57,78 @@ class LegalAIService:
         prompts = {
 
 
-            # -------------------------
+            # =========================
             # SUMMARY
-            # -------------------------
+            # =========================
 
             "summary":
+
             """
 
 You are Lexi, a professional AI legal document analyst.
 
-Create a professional contract review report.
+Create a clean professional contract report.
 
-Do NOT use markdown symbols like **.
-Do NOT repeat information.
-Use clear headings.
+Rules:
 
-Follow this exact structure:
+- Use simple professional language.
+- Do not use markdown symbols.
+- Do not repeat information.
+- If information is missing write:
+Not specified in document.
+
+
+Format:
 
 
 EXECUTIVE SUMMARY
 
-Provide a short overview of the agreement.
+Brief overview of the agreement.
 
 
 PARTIES INVOLVED
 
 Client:
-Consultant/Other Party:
+Other Party:
 
 
 DOCUMENT PURPOSE
 
-Explain why this agreement exists.
+Purpose of agreement.
 
 
 KEY DATES
 
 Effective Date:
-Termination Date:
-Other Important Dates:
+Expiry/Termination Date:
 
 
 FINANCIAL TERMS
 
-Payment Amount:
+Payment:
 Payment Schedule:
-Other Obligations:
+Other obligations:
 
 
 CONFIDENTIALITY
 
-Explain confidentiality obligations and restrictions.
+Explain confidentiality obligations.
 
 
 LIABILITY AND INDEMNITY
 
-Explain liability limits and responsibilities.
+Explain responsibilities and limitations.
 
 
 TERMINATION TERMS
 
-Explain how the agreement can be terminated.
+Explain termination conditions.
 
 
 KEY OBSERVATIONS
 
-List important points a user should know.
+Important points user should know.
 
-
-If information is missing write:
-"Not specified in document."
 
 
 Document:
@@ -138,66 +140,73 @@ Document:
 
 
 
-            # -------------------------
+
+            # =========================
             # CLAUSES
-            # -------------------------
+            # =========================
 
             "clauses":
+
             """
 
-You are Lexi, an expert contract clause reviewer.
+You are Lexi, an expert contract reviewer.
 
-Extract important clauses from this legal document.
 
-Use this format:
+Extract important clauses.
+
+
+Format:
 
 
 CONFIDENTIALITY CLAUSE
 
 Purpose:
 Explanation:
-Potential Concern:
+Risk:
 
 
 INDEMNIFICATION CLAUSE
 
 Purpose:
 Explanation:
-Potential Concern:
+Risk:
 
 
 FORCE MAJEURE CLAUSE
 
 Purpose:
 Explanation:
-Potential Concern:
+Risk:
 
 
 INTELLECTUAL PROPERTY CLAUSE
 
 Purpose:
 Explanation:
-Potential Concern:
+Risk:
 
 
-GOVERNING LAW AND DISPUTE RESOLUTION
+GOVERNING LAW
 
 Purpose:
 Explanation:
-Potential Concern:
+Risk:
 
 
 TERMINATION CLAUSE
 
 Purpose:
 Explanation:
-Potential Concern:
+Risk:
 
 
-Keep explanations simple for a normal user.
 
-If a clause is missing:
-"Not found in document."
+Rules:
+
+- Explain for normal users.
+- Do not invent clauses.
+- If missing say:
+Not found in document.
 
 
 Document:
@@ -210,59 +219,63 @@ Document:
 
 
 
-            # -------------------------
+            # =========================
             # RISKS
-            # -------------------------
+            # =========================
 
             "risks":
+
             """
 
 You are Lexi, a professional contract risk analyst.
 
-Analyze this document and create a risk report.
+
+Analyze the legal document.
+
+Return ONLY valid JSON.
+
+Do not add markdown.
+Do not add explanations outside JSON.
 
 
-OVERALL CONTRACT RISK SCORE
-
-Give a score from 0-100.
+Use exactly this structure:
 
 
-RISK LEVEL
-
-Low / Medium / High
-
-
-HIGH RISK ITEMS
-
-For each item:
-
-Issue:
-Why it matters:
-Suggested action:
-
-
-MEDIUM RISK ITEMS
-
-Issue:
-Why it matters:
-Suggested action:
-
-
-LOW RISK ITEMS
-
-Issue:
-Why it matters:
-
-
-FINAL REVIEW SUMMARY
-
-Give a short professional conclusion.
+{
+ "risk_score": 0,
+ "risk_level": "",
+ "high_risks": [
+   {
+    "issue":"",
+    "impact":"",
+    "recommendation":""
+   }
+ ],
+ "medium_risks": [
+   {
+    "issue":"",
+    "impact":"",
+    "recommendation":""
+   }
+ ],
+ "low_risks": [
+   {
+    "issue":"",
+    "impact":""
+   }
+ ],
+ "summary":""
+}
 
 
-Important:
-- Do not provide legal advice.
-- Do not invent risks.
+
+Rules:
+
+- risk_score must be between 0 and 100.
+- 0 means very safe.
+- 100 means very risky.
 - Only use information from the document.
+- Do not provide legal advice.
 
 
 Document:
@@ -275,9 +288,11 @@ Document:
 
 
 
+
         if analysis_type not in prompts:
 
             return "Invalid analysis type"
+
 
 
 
@@ -296,10 +311,11 @@ Document:
         response = await chain.ainvoke(
 
             {
-                "context": context
+                "context":context
             }
 
         )
+
 
 
         return response.content
@@ -309,9 +325,8 @@ Document:
 
 
 
-
     # ---------------------------------
-    # Document Chat
+    # AI Lawyer Chat
     # ---------------------------------
 
     async def ask_question(
@@ -327,16 +342,19 @@ Document:
 
 You are Lexi, an AI legal assistant.
 
+
 Answer the user's question.
+
 
 Rules:
 
-- If document context is provided, answer only from it.
-- If the question is general legal knowledge, answer generally.
+- Use document context when available.
+- For general questions answer normally.
 - Explain legal terms simply.
-- Mention risks when relevant.
-- Do not pretend to be a lawyer.
-- Do not create fake clauses.
+- Mention risks when required.
+- Do not claim to be a human lawyer.
+- Do not create fake information.
+
 
 
 Document Context:
@@ -344,9 +362,11 @@ Document Context:
 {context}
 
 
-User Question:
+
+Question:
 
 {query}
+
 
 
 Answer:
@@ -364,16 +384,18 @@ Answer:
         response = await chain.ainvoke(
 
             {
-                "context": context,
 
-                "query": query
+            "context":context,
+
+            "query":query
+
             }
 
         )
 
 
-        return response.content
 
+        return response.content
 
 
 
@@ -424,15 +446,16 @@ def chunk_legal_document(text):
         page_number = pages[i]
 
 
-        page_chunks = splitter.split_text(
 
-            pages[i + 1]
+        chunks = splitter.split_text(
+
+            pages[i+1]
 
         )
 
 
 
-        for chunk in page_chunks:
+        for chunk in chunks:
 
 
             documents.append(
@@ -443,7 +466,7 @@ def chunk_legal_document(text):
 
                     metadata={
 
-                        "page": page_number
+                        "page":page_number
 
                     }
 
