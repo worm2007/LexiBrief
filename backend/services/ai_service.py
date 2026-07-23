@@ -12,9 +12,9 @@ load_dotenv()
 
 
 
-# -----------------------------
-# Global LLM function
-# -----------------------------
+# ---------------------------------
+# LLM Configuration
+# ---------------------------------
 
 def get_llm():
 
@@ -22,9 +22,7 @@ def get_llm():
 
         model="llama-3.1-8b-instant",
 
-        groq_api_key=os.getenv(
-            "GROQ_API_KEY"
-        ),
+        groq_api_key=os.getenv("GROQ_API_KEY"),
 
         temperature=0.2
 
@@ -33,9 +31,10 @@ def get_llm():
 
 
 
-# -----------------------------
+
+# ---------------------------------
 # Legal AI Service
-# -----------------------------
+# ---------------------------------
 
 class LegalAIService:
 
@@ -43,6 +42,8 @@ class LegalAIService:
     def __init__(self):
 
         self.llm = get_llm()
+
+
 
 
 
@@ -56,62 +57,213 @@ class LegalAIService:
         prompts = {
 
 
+            # -------------------------
+            # SUMMARY
+            # -------------------------
+
             "summary":
             """
-Summarize this legal document into:
 
-- Executive Summary
-- Parties
-- Purpose
-- Important Dates
-- Payment Terms
-- Confidentiality
-- Liability
-- Termination
+You are Lexi, a professional AI legal document analyst.
 
-Mention page numbers where possible.
+Create a professional contract review report.
+
+Do NOT use markdown symbols like **.
+Do NOT repeat information.
+Use clear headings.
+
+Follow this exact structure:
+
+
+EXECUTIVE SUMMARY
+
+Provide a short overview of the agreement.
+
+
+PARTIES INVOLVED
+
+Client:
+Consultant/Other Party:
+
+
+DOCUMENT PURPOSE
+
+Explain why this agreement exists.
+
+
+KEY DATES
+
+Effective Date:
+Termination Date:
+Other Important Dates:
+
+
+FINANCIAL TERMS
+
+Payment Amount:
+Payment Schedule:
+Other Obligations:
+
+
+CONFIDENTIALITY
+
+Explain confidentiality obligations and restrictions.
+
+
+LIABILITY AND INDEMNITY
+
+Explain liability limits and responsibilities.
+
+
+TERMINATION TERMS
+
+Explain how the agreement can be terminated.
+
+
+KEY OBSERVATIONS
+
+List important points a user should know.
+
+
+If information is missing write:
+"Not specified in document."
+
+
+Document:
+
+{context}
+
 """,
 
 
+
+
+            # -------------------------
+            # CLAUSES
+            # -------------------------
 
             "clauses":
             """
-Extract and categorize these clauses:
 
-- Confidentiality
-- Indemnification
-- Force Majeure
-- Governing Law
-- Arbitration
-- Intellectual Property
+You are Lexi, an expert contract clause reviewer.
 
-Use bullet points.
+Extract important clauses from this legal document.
+
+Use this format:
+
+
+CONFIDENTIALITY CLAUSE
+
+Purpose:
+Explanation:
+Potential Concern:
+
+
+INDEMNIFICATION CLAUSE
+
+Purpose:
+Explanation:
+Potential Concern:
+
+
+FORCE MAJEURE CLAUSE
+
+Purpose:
+Explanation:
+Potential Concern:
+
+
+INTELLECTUAL PROPERTY CLAUSE
+
+Purpose:
+Explanation:
+Potential Concern:
+
+
+GOVERNING LAW AND DISPUTE RESOLUTION
+
+Purpose:
+Explanation:
+Potential Concern:
+
+
+TERMINATION CLAUSE
+
+Purpose:
+Explanation:
+Potential Concern:
+
+
+Keep explanations simple for a normal user.
+
+If a clause is missing:
+"Not found in document."
+
+
+Document:
+
+{context}
+
 """,
 
 
 
+
+
+            # -------------------------
+            # RISKS
+            # -------------------------
+
             "risks":
             """
-Analyze risky clauses.
 
-For each risk provide:
+You are Lexi, a professional contract risk analyst.
 
-- Risk Level (Low/Medium/High)
-- Explanation
-- Possible impact
-
-Mention this is not legal advice.
-"""
-
-        }
+Analyze this document and create a risk report.
 
 
+OVERALL CONTRACT RISK SCORE
 
-        prompt = ChatPromptTemplate.from_template(
+Give a score from 0-100.
 
-            prompts[analysis_type]
-            +
-            """
+
+RISK LEVEL
+
+Low / Medium / High
+
+
+HIGH RISK ITEMS
+
+For each item:
+
+Issue:
+Why it matters:
+Suggested action:
+
+
+MEDIUM RISK ITEMS
+
+Issue:
+Why it matters:
+Suggested action:
+
+
+LOW RISK ITEMS
+
+Issue:
+Why it matters:
+
+
+FINAL REVIEW SUMMARY
+
+Give a short professional conclusion.
+
+
+Important:
+- Do not provide legal advice.
+- Do not invent risks.
+- Only use information from the document.
+
 
 Document:
 
@@ -119,10 +271,26 @@ Document:
 
 """
 
+        }
+
+
+
+        if analysis_type not in prompts:
+
+            return "Invalid analysis type"
+
+
+
+        prompt = ChatPromptTemplate.from_template(
+
+            prompts[analysis_type]
+
         )
 
 
+
         chain = prompt | self.llm
+
 
 
         response = await chain.ainvoke(
@@ -140,6 +308,12 @@ Document:
 
 
 
+
+
+    # ---------------------------------
+    # Document Chat
+    # ---------------------------------
+
     async def ask_question(
         self,
         context,
@@ -150,28 +324,41 @@ Document:
         prompt = ChatPromptTemplate.from_template(
 
             """
-Answer the legal question.
 
-Use ONLY the provided context.
+You are Lexi, an AI legal assistant.
 
-Context:
+Answer the user's question.
+
+Rules:
+
+- If document context is provided, answer only from it.
+- If the question is general legal knowledge, answer generally.
+- Explain legal terms simply.
+- Mention risks when relevant.
+- Do not pretend to be a lawyer.
+- Do not create fake clauses.
+
+
+Document Context:
 
 {context}
 
 
-Question:
+User Question:
 
 {query}
 
 
-If the answer is not available,
-say it is not present.
+Answer:
+
 """
 
         )
 
 
+
         chain = prompt | self.llm
+
 
 
         response = await chain.ainvoke(
@@ -191,57 +378,73 @@ say it is not present.
 
 
 
-# -----------------------------
+
+
+# ---------------------------------
 # Document Chunking
-# -----------------------------
+# ---------------------------------
 
 def chunk_legal_document(text):
 
 
     pages = re.split(
+
         r'--- PAGE (\d+) ---',
+
         text
+
     )
 
 
-    docs = []
+    documents = []
+
 
 
     splitter = RecursiveCharacterTextSplitter(
 
         chunk_size=1000,
 
-        chunk_overlap=100
+        chunk_overlap=150
 
     )
 
 
+
     for i in range(
+
         1,
+
         len(pages),
+
         2
+
     ):
 
 
-        page_num = pages[i]
+        page_number = pages[i]
 
 
-        chunks = splitter.split_text(
-            pages[i+1]
+        page_chunks = splitter.split_text(
+
+            pages[i + 1]
+
         )
 
 
-        for chunk in chunks:
+
+        for chunk in page_chunks:
 
 
-            docs.append(
+            documents.append(
 
                 Document(
 
                     page_content=chunk,
 
                     metadata={
-                        "page": page_num
+
+                        "page": page_number
+
                     }
 
                 )
@@ -249,4 +452,5 @@ def chunk_legal_document(text):
             )
 
 
-    return docs
+
+    return documents
