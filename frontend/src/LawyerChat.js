@@ -36,6 +36,7 @@ function LawyerChat({ documentId }) {
     try {
 
       const response = await axios.post(
+        
 
         "https://lexibrief-backend.onrender.com/legal-chat",
 
@@ -45,6 +46,7 @@ function LawyerChat({ documentId }) {
         }
 
       );
+      console.log("LEXI RESPONSE:", response.data);
 
 
       setMessages(prev => [
