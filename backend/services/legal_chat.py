@@ -1,76 +1,55 @@
 from services.ai_service import get_llm
 
 
+
 def ask_legal_question(context, question):
 
     try:
 
+        # Create LLM instance
         llm = get_llm()
 
 
-        # -----------------------------
-        # Document Based Legal Assistant
-        # -----------------------------
-
         if context and context.strip():
 
-
             prompt = f"""
-
 You are Lexi, an AI Legal Assistant.
 
-You are answering a question about an uploaded legal document.
+Answer the user's question using ONLY the provided legal document.
 
-Use ONLY the provided document context.
-
-Document Context:
------------------
+Document:
 {context}
------------------
 
-User Question:
-{question}
-
-
-Instructions:
-
-- Explain legal terms in simple language.
-- Answer directly from the document.
-- Mention risks if they exist.
-- Mention important clauses if relevant.
-- Do not create information that is not present.
-- If the answer is not available in the document, say:
-  "This information is not present in the uploaded document."
-
-"""
-
-
-        # -----------------------------
-        # General Legal Assistant
-        # -----------------------------
-
-        else:
-
-
-            prompt = f"""
-
-You are Lexi, an AI Legal Assistant.
-
-Answer the following general legal question.
 
 Question:
 {question}
 
 
-Instructions:
+Rules:
+- Explain legal terms simply.
+- Mention risks if present.
+- Do not create information.
+- If the answer is not in the document, say:
+  "This information is not available in the uploaded document."
+"""
 
-- Explain clearly in simple language.
-- Provide useful legal information.
-- Explain concepts with examples when helpful.
-- Mention that laws can vary by country and jurisdiction.
+
+        else:
+
+            prompt = f"""
+You are Lexi, an AI Legal Assistant.
+
+Answer this general legal question:
+
+Question:
+{question}
+
+
+Rules:
+- Explain clearly.
+- Give simple examples.
+- Mention that laws depend on jurisdiction.
 - Do not pretend to be a human lawyer.
-- Do not provide false legal claims.
-
 """
 
 
@@ -84,14 +63,9 @@ Instructions:
 
     except Exception as e:
 
-
         print(
-            "LEGAL CHAT ERROR:",
-            str(e)
+            "LEGAL CHAT FUNCTION ERROR:",
+            repr(e)
         )
 
-
-        return (
-            "Sorry, I am unable to answer "
-            "your legal question right now."
-        )
+        raise e
