@@ -90,6 +90,10 @@ class AnalyzeRequest(BaseModel):
 # Upload PDF
 # =============================
 
+# =============================
+# Upload PDF
+# =============================
+
 @app.post("/upload")
 async def upload_document(
     file: UploadFile = File(...)
@@ -97,64 +101,67 @@ async def upload_document(
 
     try:
 
+        # Generate unique document ID
         doc_id = str(uuid.uuid4())
 
-
+        # Save uploaded PDF
         file_path = os.path.join(
             UPLOAD_DIR,
             f"{doc_id}.pdf"
         )
 
-
-        with open(file_path,"wb") as buffer:
-
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(
                 file.file,
                 buffer
             )
 
+        # Extract text from PDF
+        text = extract_text_from_pdf(file_path)
 
+        # Make sure PDF is not empty
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="No readable text found in PDF."
+            )
 
-        text = extract_text_from_pdf(
-            file_path
-        )
+        # Chunk the document
+        chunks = chunk_legal_document(text)
 
+        # Make sure chunks were created
+        if not chunks:
+            raise HTTPException(
+                status_code=400,
+                detail="Unable to create document chunks."
+            )
 
-        chunks = chunk_legal_document(
-            text
-        )
-
-
+        # Create vector index
         vector_service.create_and_save_index(
             chunks,
             doc_id
         )
 
-
         return {
-
             "document_id": doc_id,
-
-            "text_preview": text[:500]
-
+            "text_preview": text[:500],
+            "pages": text.count("--- PAGE"),
+            "chunks": len(chunks)
         }
 
+    except HTTPException:
+        raise
 
     except Exception as e:
 
-        import traceback
+        print("\n========== UPLOAD ERROR ==========")
+        traceback.print_exc()
+        print("==================================\n")
 
-    except Exception:
-     print("UPLOAD ERROR:")
-traceback.print_exc()
-raise
-
-raise HTTPException(
+        raise HTTPException(
             status_code=500,
-            detail=str(e)
+            detail=f"Upload failed: {str(e)}"
         )
-
-
 
 # =============================
 # Document Analysis
