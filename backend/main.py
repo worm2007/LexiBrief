@@ -15,9 +15,10 @@ from services.vector_store import VectorStoreService
 from services.legal_chat import ask_legal_question
 
 
-# -----------------------------
-# Create FastAPI App
-# -----------------------------
+
+# =============================
+# FastAPI App
+# =============================
 
 app = FastAPI(
     title="Lexi Brief API",
@@ -25,52 +26,67 @@ app = FastAPI(
 )
 
 
-# -----------------------------
+
+# =============================
 # CORS
-# -----------------------------
+# =============================
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# -----------------------------
+
+# =============================
 # Directories
-# -----------------------------
+# =============================
 
 UPLOAD_DIR = "uploads"
 VECTOR_DIR = "vector_indices"
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(VECTOR_DIR, exist_ok=True)
+
+os.makedirs(
+    UPLOAD_DIR,
+    exist_ok=True
+)
+
+
+os.makedirs(
+    VECTOR_DIR,
+    exist_ok=True
+)
 
 
 
-# -----------------------------
-# Initialize Services
-# -----------------------------
+# =============================
+# Services
+# =============================
 
 ai_service = LegalAIService()
+
 vector_service = VectorStoreService()
 
 
 
-# -----------------------------
-# Request Models
-# -----------------------------
+# =============================
+# Models
+# =============================
 
 class AnalyzeRequest(BaseModel):
+
     doc_id: str
+
     type: str
 
 
 
-# -----------------------------
+# =============================
 # Upload PDF
-# -----------------------------
+# =============================
 
 @app.post("/upload")
 async def upload_document(
@@ -88,7 +104,7 @@ async def upload_document(
         )
 
 
-        with open(file_path, "wb") as buffer:
+        with open(file_path,"wb") as buffer:
 
             shutil.copyfileobj(
                 file.file,
@@ -96,19 +112,17 @@ async def upload_document(
             )
 
 
-        # Extract PDF text
+
         text = extract_text_from_pdf(
             file_path
         )
 
 
-        # Split into chunks
         chunks = chunk_legal_document(
             text
         )
 
 
-        # Create FAISS index
         vector_service.create_and_save_index(
             chunks,
             doc_id
@@ -126,6 +140,11 @@ async def upload_document(
 
     except Exception as e:
 
+        print(
+            "UPLOAD ERROR:",
+            repr(e)
+        )
+
         raise HTTPException(
             status_code=500,
             detail=str(e)
@@ -133,9 +152,9 @@ async def upload_document(
 
 
 
-# -----------------------------
-# Analyze Document
-# -----------------------------
+# =============================
+# Document Analysis
+# =============================
 
 @app.post("/analyze")
 async def analyze_document(
@@ -151,7 +170,7 @@ async def analyze_document(
 
 
         docs = vectorstore.similarity_search(
-            "General overview of contract",
+            "contract overview",
             k=15
         )
 
@@ -179,7 +198,14 @@ async def analyze_document(
         }
 
 
+
     except Exception as e:
+
+
+        print(
+            "ANALYZE ERROR:",
+            repr(e)
+        )
 
 
         raise HTTPException(
@@ -189,9 +215,9 @@ async def analyze_document(
 
 
 
-# -----------------------------
-# Existing Document Chat
-# -----------------------------
+# =============================
+# Old Document Chat
+# =============================
 
 @app.post("/chat")
 async def document_chat(
@@ -207,15 +233,9 @@ async def document_chat(
         )
 
 
-        retriever = vectorstore.as_retriever(
-            search_kwargs={
-                "k": 5
-            }
-        )
-
-
-        docs = retriever.get_relevant_documents(
-            query
+        docs = vectorstore.similarity_search(
+            query,
+            k=5
         )
 
 
@@ -242,7 +262,14 @@ async def document_chat(
         }
 
 
+
     except Exception as e:
+
+
+        print(
+            "CHAT ERROR:",
+            repr(e)
+        )
 
 
         raise HTTPException(
@@ -252,10 +279,9 @@ async def document_chat(
 
 
 
-# -----------------------------
+# =============================
 # Hybrid AI Lawyer
-# Document + General Questions
-# -----------------------------
+# =============================
 
 @app.post("/legal-chat")
 async def legal_chat(
@@ -265,13 +291,13 @@ async def legal_chat(
     try:
 
 
-        document_id = data.get(
-            "document_id"
+        question = data.get(
+            "question"
         )
 
 
-        question = data.get(
-            "question"
+        document_id = data.get(
+            "document_id"
         )
 
 
@@ -281,16 +307,17 @@ async def legal_chat(
 
                 status_code=400,
 
-                detail="Question is required"
+                detail="Question required"
 
             )
+
 
 
         context = ""
 
 
-        # If document exists,
-        # search inside document
+
+        # Document based answer
 
         if document_id:
 
@@ -304,7 +331,8 @@ async def legal_chat(
             )
 
 
-        # Generate Lexi response
+
+        # General + Document AI answer
 
         answer = ask_legal_question(
 
@@ -315,22 +343,27 @@ async def legal_chat(
         )
 
 
+
         return {
 
-
             "answer": answer,
-
 
             "mode":
             "document"
             if document_id
             else "general"
 
-
         }
 
 
+
     except Exception as e:
+
+
+        print(
+            "LEGAL CHAT ERROR:",
+            repr(e)
+        )
 
 
         raise HTTPException(
@@ -343,9 +376,25 @@ async def legal_chat(
 
 
 
-# -----------------------------
-# Run Server
-# -----------------------------
+# =============================
+# Health Check
+# =============================
+
+@app.get("/")
+def home():
+
+    return {
+
+        "message":
+        "Lexi Brief API Running"
+
+    }
+
+
+
+# =============================
+# Local Run
+# =============================
 
 if __name__ == "__main__":
 
