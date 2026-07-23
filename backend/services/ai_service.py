@@ -42,3 +42,5 @@ def chunk_legal_document(text):
         for c in chunks:
             docs.append(Document(page_content=c, metadata={"page": page_num}))
     return docs
+def get_llm():
+    return llm
