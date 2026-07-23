@@ -1,3 +1,5 @@
+import traceback
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -140,12 +142,14 @@ async def upload_document(
 
     except Exception as e:
 
-        print(
-            "UPLOAD ERROR:",
-            repr(e)
-        )
+        import traceback
 
-        raise HTTPException(
+    except Exception:
+     print("UPLOAD ERROR:")
+traceback.print_exc()
+raise
+
+raise HTTPException(
             status_code=500,
             detail=str(e)
         )
