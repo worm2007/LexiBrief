@@ -118,6 +118,8 @@ async def upload_document(
 
         # Extract text from PDF
         text = extract_text_from_pdf(file_path)
+        print(f"Text length: {len(text)}")
+        print(text[:500])
 
         # Make sure PDF is not empty
         if not text.strip():
@@ -128,6 +130,7 @@ async def upload_document(
 
         # Chunk the document
         chunks = chunk_legal_document(text)
+        print(f"Chunks created: {len(chunks)}")
 
         # Make sure chunks were created
         if not chunks:
