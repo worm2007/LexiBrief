@@ -1,13 +1,26 @@
 # Environment files
 .env
 .env.*
+!.env.example
 
 # Node.js
 node_modules/
+dist/
 
 # Python
 __pycache__/
 *.pyc
+venv/
+.venv/
+
+# Generated backend files
+backend/uploads/
+backend/vector_indices/
+backend.zip
+
+# Accidental root Node files
+/package.json
+/package-lock.json
 
 # macOS
 .DS_Store
