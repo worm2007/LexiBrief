@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-
+import React, { useState, useRef } from "react";
 import LawyerChat from "./components/LawyerChat";
 import Header from "./components/Header";
 import RiskScore from "./components/RiskScore";
