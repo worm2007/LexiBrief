@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useAnalysis } from "../../context/AnalysisContext";
 import { analyzeDocument } from "../../services/api";
-
+import { toast } from "sonner";
 export default function HeroUpload() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -27,34 +27,39 @@ export default function HeroUpload() {
     setFile(selectedFile);
   };
 
-  const handleUpload = async () => {
-    if (!file) {
-      alert("Please select a PDF document first.");
-      return;
-    }
+ const handleUpload = async () => {
+  if (!file) {
+    toast.error("Please select a PDF document first.");
+    return;
+  }
 
-    try {
-      setLoading(true);
+  const loadingToast = toast.loading("Analysing your document...");
 
-      const data = await analyzeDocument(file);
+  try {
+    setLoading(true);
 
-      setAnalysis(data);
+    const data = await analyzeDocument(file);
 
-      //alert("Document analysis completed successfully!");
-    
-    } catch (error) {
-      console.error("Upload error:", error);
+    setAnalysis(data);
 
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.message ||
-        "Document analysis failed.";
+    toast.success("Document analysed successfully!", {
+      id: loadingToast,
+    });
+  } catch (error) {
+    console.error("Upload error:", error);
 
-      alert(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const errorMessage =
+      error.response?.data?.detail ||
+      error.message ||
+      "Document analysis failed.";
+
+    toast.error(errorMessage, {
+      id: loadingToast,
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-[#0B1120] p-10">
