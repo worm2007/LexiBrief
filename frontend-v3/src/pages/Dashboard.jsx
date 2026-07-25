@@ -5,32 +5,24 @@ import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 
 import HeroUpload from "../components/upload/HeroUpload";
-
 import StatsGrid from "../components/dashboard/StatsGrid";
 import Tabs from "../components/dashboard/Tabs";
 import SummaryPanel from "../components/dashboard/SummaryPanel";
 import RiskPanel from "../components/dashboard/RiskPanel";
 import RecentDocuments from "../components/dashboard/RecentDocuments";
 import ClausePanel from "../components/dashboard/ClausePanel";
-
 import AIChat from "../components/chat/AIChat";
 
-function ComingSoonPanel({
-  icon: Icon,
-  title,
-  description,
-}) {
+function ComingSoonPanel({ icon: Icon, title, description }) {
   return (
-    <div className="mt-8 rounded-3xl border border-slate-800 bg-slate-900/60 p-10 text-center">
+    <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/60 p-6 text-center sm:mt-8 sm:p-10">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400">
         <Icon size={28} />
       </div>
 
-      <h2 className="mt-5 text-2xl font-bold text-white">
-        {title}
-      </h2>
+      <h2 className="mt-5 text-xl font-bold text-white sm:text-2xl">{title}</h2>
 
-      <p className="mx-auto mt-3 max-w-xl leading-7 text-slate-400">
+      <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400 sm:text-base">
         {description}
       </p>
     </div>
@@ -40,9 +32,11 @@ function ComingSoonPanel({
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [activeSection, setActiveSection] = useState("Dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleSidebarNavigation = (section) => {
     setActiveSection(section);
+    setSidebarOpen(false);
 
     const tabMap = {
       Dashboard: "Overview",
@@ -55,10 +49,7 @@ export default function Dashboard() {
       setActiveTab(tabMap[section]);
     }
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleTabChange = (tab) => {
@@ -79,38 +70,28 @@ export default function Dashboard() {
       <HeroUpload />
       <StatsGrid />
 
-      <Tabs
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
-      />
+      <Tabs activeTab={activeTab} setActiveTab={handleTabChange} />
 
       {activeTab === "Overview" && (
         <>
-          <div className="mt-8 grid gap-8 xl:grid-cols-2">
-            <SummaryPanel />
-            <RiskPanel />
+          <div className="mt-6 grid min-w-0 gap-6 xl:mt-8 xl:grid-cols-2 xl:gap-8">
+            <div className="min-w-0"><SummaryPanel /></div>
+            <div className="min-w-0"><RiskPanel /></div>
           </div>
-
           <RecentDocuments />
         </>
       )}
 
       {activeTab === "Clauses" && (
-        <div className="mt-8">
-          <ClausePanel />
-        </div>
+        <div className="mt-6 min-w-0 sm:mt-8"><ClausePanel /></div>
       )}
 
       {activeTab === "Risk Analysis" && (
-        <div className="mt-8">
-          <RiskPanel />
-        </div>
+        <div className="mt-6 min-w-0 sm:mt-8"><RiskPanel /></div>
       )}
 
       {activeTab === "AI Chat" && (
-        <div className="mt-8">
-          <AIChat />
-        </div>
+        <div className="mt-6 min-w-0 sm:mt-8"><AIChat /></div>
       )}
     </>
   );
@@ -122,10 +103,7 @@ export default function Dashboard() {
           <>
             <HeroUpload />
             <StatsGrid />
-
-            <div className="mt-8">
-              <RecentDocuments />
-            </div>
+            <div className="mt-6 min-w-0 sm:mt-8"><RecentDocuments /></div>
           </>
         );
 
@@ -133,10 +111,7 @@ export default function Dashboard() {
         return (
           <>
             <StatsGrid />
-
-            <div className="mt-8">
-              <AIChat />
-            </div>
+            <div className="mt-6 min-w-0 sm:mt-8"><AIChat /></div>
           </>
         );
 
@@ -144,10 +119,7 @@ export default function Dashboard() {
         return (
           <>
             <StatsGrid />
-
-            <div className="mt-8">
-              <RiskPanel />
-            </div>
+            <div className="mt-6 min-w-0 sm:mt-8"><RiskPanel /></div>
           </>
         );
 
@@ -155,10 +127,7 @@ export default function Dashboard() {
         return (
           <>
             <StatsGrid />
-
-            <div className="mt-8">
-              <ClausePanel />
-            </div>
+            <div className="mt-6 min-w-0 sm:mt-8"><ClausePanel /></div>
           </>
         );
 
@@ -187,16 +156,18 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#020617] text-white">
+    <div className="flex min-h-screen w-full overflow-x-hidden bg-[#020617] text-white">
       <Sidebar
         activeSection={activeSection}
         onNavigate={handleSidebarNavigation}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Navbar />
+        <Navbar onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-10">
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 sm:px-6 sm:py-7 lg:px-10 lg:py-10">
           {renderSection()}
         </main>
       </div>

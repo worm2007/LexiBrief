@@ -9,7 +9,7 @@ import {
   FiLayers,
 } from "react-icons/fi";
 
-import { Scale } from "lucide-react";
+import { Scale, X } from "lucide-react";
 import { motion } from "framer-motion";
 
 const menu = [
@@ -25,98 +25,139 @@ const menu = [
 export default function Sidebar({
   activeSection,
   onNavigate,
+  isOpen = false,
+  onClose = () => {},
 }) {
+  const handleNavigation = (section) => {
+    onNavigate(section);
+    onClose();
+  };
+
   return (
-    <aside className="w-72 min-h-screen bg-[#0B1220] border-r border-slate-800 flex flex-col justify-between">
-      <div>
-        <div className="px-8 pt-8 pb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 flex items-center justify-center">
-              <Scale size={24} />
+    <>
+      {/* Mobile background overlay */}
+      {isOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+        />
+      )}
+
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50
+          flex min-h-screen w-72 flex-col justify-between
+          overflow-y-auto border-r border-slate-800
+          bg-[#0B1220]
+          transition-transform duration-300 ease-in-out
+
+          md:static md:z-auto md:flex-shrink-0 md:translate-x-0
+
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
+        {/* Mobile close button */}
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-2 text-slate-300 hover:bg-slate-800 md:hidden"
+        >
+          <X size={22} />
+        </button>
+
+        <div>
+          <div className="px-8 pb-6 pt-8">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500">
+                <Scale size={24} />
+              </div>
+
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-white">
+                  LexiBrief
+                </h1>
+
+                <p className="text-xs text-slate-400">
+                  AI Legal Intelligence
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2 px-4">
+            {menu.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeSection === item.name;
+
+              return (
+                <motion.button
+                  type="button"
+                  whileHover={{ x: 6 }}
+                  key={item.name}
+                  onClick={() => handleNavigation(item.name)}
+                  className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 transition-all ${
+                    isActive
+                      ? "bg-indigo-600 text-white shadow-lg"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  }`}
+                >
+                  <span className="text-xl">
+                    <Icon />
+                  </span>
+
+                  <span className="font-medium">
+                    {item.name}
+                  </span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-5">
+          <div className="rounded-3xl bg-gradient-to-br from-indigo-600 to-blue-600 p-5">
+            <div className="flex items-center gap-2">
+              <FiStar />
+
+              <h3 className="font-semibold text-white">
+                Upgrade to Pro
+              </h3>
+            </div>
+
+            <p className="mt-3 text-sm leading-6 text-blue-100">
+              Unlock advanced AI legal analysis, unlimited uploads and premium
+              clause detection.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => handleNavigation("Settings")}
+              className="mt-5 w-full rounded-xl bg-white py-3 font-semibold text-indigo-700 transition hover:scale-105"
+            >
+              Upgrade
+            </button>
+          </div>
+
+          <div className="mt-6 flex items-center gap-4 rounded-2xl bg-slate-900 p-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 font-bold text-white">
+              A
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                LexiBrief
-              </h1>
+              <h4 className="font-semibold text-white">
+                Anubhav
+              </h4>
 
               <p className="text-xs text-slate-400">
-                AI Legal Intelligence
+                Legal Analyst
               </p>
             </div>
           </div>
         </div>
-
-        <div className="px-4 mt-4 space-y-2">
-          {menu.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.name;
-
-            return (
-              <motion.button
-                type="button"
-                whileHover={{ x: 6 }}
-                key={item.name}
-                onClick={() => onNavigate(item.name)}
-                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
-                  isActive
-                    ? "bg-indigo-600 text-white shadow-lg"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                <span className="text-xl">
-                  <Icon />
-                </span>
-
-                <span className="font-medium">
-                  {item.name}
-                </span>
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="p-5">
-        <div className="rounded-3xl bg-gradient-to-br from-indigo-600 to-blue-600 p-5">
-          <div className="flex items-center gap-2">
-            <FiStar />
-
-            <h3 className="font-semibold">
-              Upgrade to Pro
-            </h3>
-          </div>
-
-          <p className="text-sm text-blue-100 mt-3 leading-6">
-            Unlock advanced AI legal analysis, unlimited uploads and premium
-            clause detection.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => onNavigate("Settings")}
-            className="mt-5 w-full rounded-xl bg-white text-indigo-700 font-semibold py-3 hover:scale-105 transition"
-          >
-            Upgrade
-          </button>
-        </div>
-
-        <div className="mt-6 flex items-center gap-4 rounded-2xl bg-slate-900 p-4">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 flex items-center justify-center font-bold">
-            A
-          </div>
-
-          <div>
-            <h4 className="font-semibold">
-              Anubhav
-            </h4>
-
-            <p className="text-xs text-slate-400">
-              Legal Analyst
-            </p>
-          </div>
-        </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
