@@ -40,7 +40,8 @@ export default function HeroUpload() {
 
       setAnalysis(data);
 
-      alert("Document analysis completed successfully!");
+      //alert("Document analysis completed successfully!");
+    
     } catch (error) {
       console.error("Upload error:", error);
 
