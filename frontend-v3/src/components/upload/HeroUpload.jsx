@@ -18,7 +18,7 @@ export default function HeroUpload() {
     }
 
     if (selectedFile.type !== "application/pdf") {
-      alert("Please select a PDF file.");
+      toast.alert("Please select a PDF file.");
       event.target.value = "";
       setFile(null);
       return;
