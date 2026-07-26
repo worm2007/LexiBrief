@@ -11,6 +11,7 @@ import {
 
 import { Scale, X } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "../../context/AuthContext";
 
 const menu = [
   { name: "Dashboard", icon: FiHome },
@@ -28,6 +29,9 @@ export default function Sidebar({
   isOpen = false,
   onClose = () => {},
 }) {
+  const { user } = useAuth();
+  const initials = user?.full_name?.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "U";
+
   const handleNavigation = (section) => {
     onNavigate(section);
     onClose();
@@ -143,16 +147,16 @@ export default function Sidebar({
 
           <div className="mt-6 flex items-center gap-4 rounded-2xl bg-slate-900 p-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 font-bold text-white">
-              A
+              {initials}
             </div>
 
             <div>
               <h4 className="font-semibold text-white">
-                Anubhav
+                {user?.full_name || "LexiBrief User"}
               </h4>
 
               <p className="text-xs text-slate-400">
-                Legal Analyst
+                {user?.email || "Secure account"}
               </p>
             </div>
           </div>

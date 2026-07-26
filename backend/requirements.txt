@@ -72,3 +72,7 @@ websockets==15.0.1
 xxhash==3.8.1
 yarl==1.24.5
 zstandard==0.25.0
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.5.0
+email-validator==2.3.0
+psycopg[binary]==3.2.10

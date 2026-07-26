@@ -33,7 +33,7 @@ export default function HeroUpload() {
   const [progress, setProgress] = useState(0);
   const [activeStep, setActiveStep] = useState(0);
 
-  const { setAnalysis } = useAnalysis();
+  const { setAnalysis, refreshDocuments } = useAnalysis();
 
   useEffect(() => {
     if (!loading) {
@@ -171,6 +171,7 @@ export default function HeroUpload() {
       setProgress(100);
       setActiveStep(ANALYSIS_STEPS.length - 1);
       setAnalysis(data);
+      await refreshDocuments();
 
       toast.success("Document analysed successfully!", {
         id: loadingToast,
@@ -195,7 +196,7 @@ export default function HeroUpload() {
   };
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-[#0B1120] p-6 sm:p-10">
+    <section id="upload-area" className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-[#0B1120] p-6 sm:p-10">
       <div className="absolute -right-40 -top-40 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl" />
 
       <div className="absolute -bottom-32 -left-32 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />

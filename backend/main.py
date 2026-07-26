@@ -5,605 +5,329 @@ import traceback
 import uuid
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+load_dotenv()
+
+from auth import create_access_token, get_current_user, hash_password, verify_password
+from database import Base, engine, get_db
+from models import ChatMessage, Document, User
+from schemas import AnalyzeRequest, LegalChatRequest, LoginRequest, RegisterRequest
 from services.ai_service import LegalAIService, chunk_legal_document
 from services.legal_chat import ask_legal_question
 from services.vector_store import VectorStoreService
 from utils.pdf_handler import extract_text_from_pdf
 
+Base.metadata.create_all(bind=engine)
 
-# =============================
-# Environment
-# =============================
+app = FastAPI(title="LexiBrief API", version="2.0", description="Authenticated AI legal document platform")
 
-load_dotenv()
-
-
-# =============================
-# FastAPI App
-# =============================
-
-app = FastAPI(
-    title="Lexi Brief API",
-    version="1.0",
-    description="AI-powered legal document analysis API",
-)
-
-
-# =============================
-# CORS
-# =============================
-
+origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# =============================
-# Directories
-# =============================
-
-UPLOAD_DIR = "uploads"
-VECTOR_DIR = "vector_indices"
-
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+VECTOR_DIR = os.getenv("VECTOR_DIR", "vector_indices")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(VECTOR_DIR, exist_ok=True)
 
-
-# =============================
-# Services
-# =============================
-
 ai_service = LegalAIService()
 vector_service = VectorStoreService()
+MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
-# =============================
-# Request Models
-# =============================
-
-class AnalyzeRequest(BaseModel):
-    doc_id: str
-    type: str
+def user_payload(user: User) -> dict:
+    return {"id": user.id, "full_name": user.full_name, "email": user.email, "created_at": user.created_at}
 
 
-class LegalChatRequest(BaseModel):
-    question: str
-    document_id: str | None = None
+def document_payload(document: Document, include_analysis: bool = True) -> dict:
+    data = {
+        "document_id": document.id,
+        "filename": document.filename,
+        "pages": document.pages,
+        "chunks": document.chunks,
+        "text_preview": document.text_preview,
+        "status": document.status,
+        "created_at": document.created_at,
+        "updated_at": document.updated_at,
+    }
+    if include_analysis:
+        data.update({"summary": document.summary, "clauses": document.clauses, "risks": document.risks})
+    return data
 
-
-# =============================
-# Helper Functions
-# =============================
 
 def validate_pdf(file: UploadFile) -> None:
-    """
-    Validate that a PDF file was selected.
-    """
-
     if not file.filename:
-        raise HTTPException(
-            status_code=400,
-            detail="No file was selected.",
-        )
-
+        raise HTTPException(400, "No file was selected.")
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF files are currently supported.",
-        )
+        raise HTTPException(400, "Only PDF files are currently supported.")
 
 
 def save_uploaded_pdf(file: UploadFile, doc_id: str) -> str:
-    """
-    Save an uploaded PDF and return its local path.
-    """
-
-    file_path = os.path.join(
-        UPLOAD_DIR,
-        f"{doc_id}.pdf",
-    )
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(
-            file.file,
-            buffer,
-        )
-
-    return file_path
+    path = os.path.join(UPLOAD_DIR, f"{doc_id}.pdf")
+    total = 0
+    with open(path, "wb") as buffer:
+        while chunk := file.file.read(1024 * 1024):
+            total += len(chunk)
+            if total > MAX_FILE_SIZE:
+                buffer.close()
+                os.remove(path)
+                raise HTTPException(413, "PDF size must be 10 MB or less.")
+            buffer.write(chunk)
+    return path
 
 
 def prepare_document(file: UploadFile) -> dict:
-    """
-    Save a PDF, extract its text, split it into chunks,
-    and create its vector index.
-    """
-
     doc_id = str(uuid.uuid4())
-
-    file_path = save_uploaded_pdf(
-        file,
-        doc_id,
-    )
-
-    text = extract_text_from_pdf(file_path)
-
-    print(f"Document ID: {doc_id}")
-    print(f"Text length: {len(text)}")
-    print(text[:500])
-
-    if not text or not text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="No readable text found in PDF.",
-        )
-
-    chunks = chunk_legal_document(text)
-
-    print(f"Chunks created: {len(chunks)}")
-
-    if not chunks:
-        raise HTTPException(
-            status_code=400,
-            detail="Unable to create document chunks.",
-        )
-
-    vector_service.create_and_save_index(
-        chunks,
-        doc_id,
-    )
-
-    return {
-        "document_id": doc_id,
-        "text": text,
-        "chunks": chunks,
-        "pages": text.count("--- PAGE"),
-    }
+    path = save_uploaded_pdf(file, doc_id)
+    try:
+        text = extract_text_from_pdf(path)
+        if not text or not text.strip():
+            raise HTTPException(400, "No readable text found in PDF.")
+        chunks = chunk_legal_document(text)
+        if not chunks:
+            raise HTTPException(400, "Unable to create document chunks.")
+        vector_service.create_and_save_index(chunks, doc_id)
+        return {"document_id": doc_id, "path": path, "text": text, "chunks": chunks, "pages": max(1, text.count("--- PAGE"))}
+    except Exception:
+        if os.path.exists(path):
+            os.remove(path)
+        raise
 
 
-def get_analysis_context(
-    doc_id: str,
-    search_query: str = "contract overview",
-    result_count: int = 15,
-) -> str:
-    """
-    Load a stored vector index and retrieve relevant document text.
-    """
+def get_owned_document(db: Session, user: User, doc_id: str) -> Document:
+    document = db.scalar(select(Document).where(Document.id == doc_id, Document.user_id == user.id))
+    if not document:
+        raise HTTPException(404, "Document not found.")
+    return document
 
+
+def get_analysis_context(doc_id: str, search_query: str, result_count: int = 15) -> str:
     vectorstore = vector_service.load_index(doc_id)
-
-    docs = vectorstore.similarity_search(
-        search_query,
-        k=result_count,
-    )
-
-    context = "\n\n".join(
-        doc.page_content
-        for doc in docs
-    )
-
+    docs = vectorstore.similarity_search(search_query, k=result_count)
+    context = "\n\n".join(doc.page_content for doc in docs)
     if not context.strip():
-        raise HTTPException(
-            status_code=404,
-            detail="No relevant document content was found.",
-        )
-
+        raise HTTPException(404, "No relevant document content was found.")
     return context
 
 
 def parse_risk_response(risks: str) -> dict:
-    """
-    Convert the AI risk response from a JSON string
-    into a Python dictionary.
-    """
-
-    fallback = {
-        "risk_score": 0,
-        "risk_level": "Unknown",
-        "high_risks": [],
-        "medium_risks": [],
-        "low_risks": [],
-        "summary": risks,
-    }
-
+    fallback = {"risk_score": 0, "risk_level": "Unknown", "high_risks": [], "medium_risks": [], "low_risks": [], "summary": risks or ""}
     if not isinstance(risks, str) or not risks.strip():
         return fallback
-
-    cleaned_risks = risks.strip()
-
-    # Remove Markdown JSON code block if the AI includes one.
-    if cleaned_risks.startswith("```json"):
-        cleaned_risks = cleaned_risks[7:]
-    elif cleaned_risks.startswith("```"):
-        cleaned_risks = cleaned_risks[3:]
-
-    if cleaned_risks.endswith("```"):
-        cleaned_risks = cleaned_risks[:-3]
-
+    cleaned = risks.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
     try:
-        parsed_risks = json.loads(
-            cleaned_risks.strip()
-        )
-
-        if not isinstance(parsed_risks, dict):
-            return fallback
-
-        return {
-            "risk_score": parsed_risks.get(
-                "risk_score",
-                0,
-            ),
-            "risk_level": parsed_risks.get(
-                "risk_level",
-                "Unknown",
-            ),
-            "high_risks": parsed_risks.get(
-                "high_risks",
-                [],
-            ),
-            "medium_risks": parsed_risks.get(
-                "medium_risks",
-                [],
-            ),
-            "low_risks": parsed_risks.get(
-                "low_risks",
-                [],
-            ),
-            "summary": parsed_risks.get(
-                "summary",
-                "No risk summary was generated.",
-            ),
-        }
-
+        parsed = json.loads(cleaned.strip())
+        return parsed if isinstance(parsed, dict) else fallback
     except (json.JSONDecodeError, TypeError):
         return fallback
 
 
-# =============================
-# Upload PDF
-# =============================
-
-@app.post("/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-):
-    try:
-        validate_pdf(file)
-
-        document = prepare_document(file)
-
-        return {
-            "document_id": document["document_id"],
-            "filename": file.filename,
-            "text_preview": document["text"][:500],
-            "pages": document["pages"],
-            "chunks": len(document["chunks"]),
-            "status": "uploaded",
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        print("\n========== UPLOAD ERROR ==========")
-        traceback.print_exc()
-        print("==================================\n")
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Upload failed: {str(error)}",
-        ) from error
+@app.post("/auth/register", status_code=status.HTTP_201_CREATED)
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    email = request.email.lower().strip()
+    if db.scalar(select(User).where(User.email == email)):
+        raise HTTPException(409, "An account with this email already exists.")
+    user = User(full_name=request.full_name.strip(), email=email, password_hash=hash_password(request.password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"access_token": create_access_token(user.id), "token_type": "bearer", "user": user_payload(user)}
 
 
-# =============================
-# Individual Document Analysis
-# =============================
-
-@app.post("/analyze")
-async def analyze_document(
-    request: AnalyzeRequest,
-):
-    try:
-        analysis_type = request.type.strip().lower()
-
-        allowed_types = {
-            "summary",
-            "clauses",
-            "risks",
-        }
-
-        if analysis_type not in allowed_types:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Invalid analysis type. "
-                    "Use summary, clauses, or risks."
-                ),
-            )
-
-        search_queries = {
-            "summary": (
-                "contract overview parties purpose dates "
-                "payment confidentiality liability termination"
-            ),
-            "clauses": (
-                "confidentiality indemnification "
-                "intellectual property termination "
-                "dispute resolution force majeure"
-            ),
-            "risks": (
-                "legal risks liability penalties "
-                "termination obligations indemnity "
-                "disputes payment risks"
-            ),
-        }
-
-        context = get_analysis_context(
-            doc_id=request.doc_id,
-            search_query=search_queries[analysis_type],
-            result_count=15,
-        )
-
-        result = await ai_service.analyze_document(
-            context,
-            analysis_type,
-        )
-
-        # Return risks as a real JSON object.
-        if analysis_type == "risks":
-            result = parse_risk_response(result)
-
-        return {
-            "document_id": request.doc_id,
-            "analysis_type": analysis_type,
-            "result": result,
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        print("\n========== ANALYZE ERROR ==========")
-        traceback.print_exc()
-        print("===================================\n")
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {str(error)}",
-        ) from error
+@app.post("/auth/login")
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.email == request.email.lower().strip()))
+    if not user or not verify_password(request.password, user.password_hash):
+        raise HTTPException(401, "Incorrect email or password.")
+    return {"access_token": create_access_token(user.id), "token_type": "bearer", "user": user_payload(user)}
 
 
-# =============================
-# Full Document Analysis
-# =============================
+@app.get("/auth/me")
+def me(user: User = Depends(get_current_user)):
+    return user_payload(user)
+
+
+@app.get("/documents")
+def list_documents(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    documents = db.scalars(select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc())).all()
+    return [document_payload(document, include_analysis=False) for document in documents]
+
+
+@app.get("/documents/{doc_id}")
+def read_document(doc_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return document_payload(get_owned_document(db, user, doc_id))
+
+
+@app.delete("/documents/{doc_id}", status_code=204)
+def delete_document(doc_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    document = get_owned_document(db, user, doc_id)
+    for path in [document.stored_path, os.path.join(VECTOR_DIR, doc_id)]:
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+        elif os.path.isfile(path):
+            os.remove(path)
+    db.delete(document)
+    db.commit()
+
 
 @app.post("/full-analysis")
-async def full_analysis(
-    file: UploadFile = File(...),
-):
+async def full_analysis(file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        validate_pdf(file)
+        prepared = prepare_document(file)
+        doc_id = prepared["document_id"]
+        summary_context = get_analysis_context(doc_id, "contract overview parties purpose important dates payment confidentiality liability termination")
+        clauses_context = get_analysis_context(doc_id, "confidentiality indemnification force majeure intellectual property termination dispute resolution")
+        risks_context = get_analysis_context(doc_id, "legal risks unlimited liability penalties indemnity termination obligations disputes payment risks")
+        summary = await ai_service.analyze_document(summary_context, "summary")
+        clauses = await ai_service.analyze_document(clauses_context, "clauses")
+        risks = parse_risk_response(await ai_service.analyze_document(risks_context, "risks"))
+        document = Document(
+            id=doc_id, user_id=user.id, filename=file.filename, stored_path=prepared["path"],
+            pages=prepared["pages"], chunks=len(prepared["chunks"]), text_preview=prepared["text"][:500],
+            summary=summary, clauses=clauses, risks=risks, status="analyzed",
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document_payload(document)
+    except HTTPException:
+        raise
+    except Exception as error:
+        traceback.print_exc()
+        raise HTTPException(500, f"Full analysis failed: {error}") from error
+@app.post("/analyze-guest")
+async def analyze_guest(file: UploadFile = File(...)):
     try:
         validate_pdf(file)
 
-        # Upload, extract, chunk and index document.
-        document = prepare_document(file)
+        prepared = prepare_document(file)
+        doc_id = prepared["document_id"]
 
-        doc_id = document["document_id"]
-
-        # Retrieve relevant context for the summary.
         summary_context = get_analysis_context(
-            doc_id=doc_id,
-            search_query=(
-                "contract overview parties purpose "
-                "important dates payment confidentiality "
-                "liability termination"
-            ),
-            result_count=15,
+            doc_id,
+            "contract overview parties purpose important dates payment confidentiality liability termination"
         )
 
-        # Retrieve relevant context for clauses.
         clauses_context = get_analysis_context(
-            doc_id=doc_id,
-            search_query=(
-                "confidentiality indemnification "
-                "force majeure intellectual property "
-                "termination dispute resolution"
-            ),
-            result_count=15,
+            doc_id,
+            "confidentiality indemnification force majeure intellectual property termination dispute resolution"
         )
 
-        # Retrieve relevant context for risks.
         risks_context = get_analysis_context(
-            doc_id=doc_id,
-            search_query=(
-                "legal risks unlimited liability "
-                "penalties indemnity termination "
-                "obligations disputes payment risks"
-            ),
-            result_count=15,
+            doc_id,
+            "legal risks unlimited liability penalties indemnity termination obligations disputes payment risks"
         )
 
-        # Generate summary.
         summary = await ai_service.analyze_document(
             summary_context,
-            "summary",
+            "summary"
         )
 
-        # Generate clause analysis.
         clauses = await ai_service.analyze_document(
             clauses_context,
-            "clauses",
+            "clauses"
         )
 
-        # Generate risk analysis.
-        risks = await ai_service.analyze_document(
-            risks_context,
-            "risks",
+        risks = parse_risk_response(
+            await ai_service.analyze_document(
+                risks_context,
+                "risks"
+            )
         )
 
-        # Convert the risk JSON string into an object.
-        risks_data = parse_risk_response(risks)
+        # Cleanup temporary files
+        if os.path.exists(prepared["path"]):
+            os.remove(prepared["path"])
+
+        shutil.rmtree(
+            os.path.join(VECTOR_DIR, doc_id),
+            ignore_errors=True,
+        )
 
         return {
-            "document_id": doc_id,
+            "guest": True,
+            "document_id": None,
             "filename": file.filename,
-            "pages": document["pages"],
-            "chunks": len(document["chunks"]),
-            "text_preview": document["text"][:500],
+            "pages": prepared["pages"],
             "summary": summary,
             "clauses": clauses,
-            "risks": risks_data,
-            "status": "analyzed",
+            "risks": risks,
         }
 
     except HTTPException:
         raise
 
     except Exception as error:
-        print("\n======= FULL ANALYSIS ERROR =======")
         traceback.print_exc()
-        print("===================================\n")
-
         raise HTTPException(
-            status_code=500,
-            detail=f"Full analysis failed: {str(error)}",
-        ) from error
-
-
-# =============================
-# Old Document Chat
-# =============================
-
-@app.post("/chat")
-async def document_chat(
-    doc_id: str,
-    query: str,
-):
-    try:
-        if not doc_id.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Document ID is required.",
-            )
-
-        if not query.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Question is required.",
-            )
-
-        context = get_analysis_context(
-            doc_id=doc_id,
-            search_query=query,
-            result_count=5,
+            500,
+            f"Guest analysis failed: {error}",
         )
 
-        answer = await ai_service.ask_question(
-            context,
-            query,
-        )
+@app.post("/analyze")
+async def analyze_document(request: AnalyzeRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    document = get_owned_document(db, user, request.doc_id)
+    analysis_type = request.type.strip().lower()
+    queries = {
+        "summary": "contract overview parties purpose dates payment confidentiality liability termination",
+        "clauses": "confidentiality indemnification intellectual property termination dispute resolution force majeure",
+        "risks": "legal risks liability penalties termination obligations indemnity disputes payment risks",
+    }
+    if analysis_type not in queries:
+        raise HTTPException(400, "Use summary, clauses, or risks.")
+    result = await ai_service.analyze_document(get_analysis_context(document.id, queries[analysis_type]), analysis_type)
+    if analysis_type == "risks":
+        result = parse_risk_response(result)
+    setattr(document, analysis_type, result)
+    document.status = "analyzed"
+    db.commit()
+    return {"document_id": document.id, "analysis_type": analysis_type, "result": result}
 
-        return {
-            "answer": answer,
-            "mode": "document",
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        print("\n=========== CHAT ERROR ===========")
-        traceback.print_exc()
-        print("==================================\n")
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Chat failed: {str(error)}",
-        ) from error
-
-
-# =============================
-# Hybrid AI Lawyer
-# =============================
 
 @app.post("/legal-chat")
-async def legal_chat(
-    request: LegalChatRequest,
-):
-    try:
-        question = request.question.strip()
-
-        if not question:
-            raise HTTPException(
-                status_code=400,
-                detail="Question is required.",
-            )
-
-        context = ""
-
-        # Use document context when document_id exists.
-        if request.document_id:
-            context = vector_service.search_document(
-                request.document_id,
-                question,
-            )
-
-        answer = ask_legal_question(
-            context,
-            question,
-        )
-
-        return {
-            "answer": answer,
-            "mode": (
-                "document"
-                if request.document_id
-                else "general"
-            ),
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        print("\n======== LEGAL CHAT ERROR =========")
-        traceback.print_exc()
-        print("===================================\n")
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Legal chat failed: {str(error)}",
-        ) from error
+def legal_chat(request: LegalChatRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(400, "Question is required.")
+    context = ""
+    if request.document_id:
+        get_owned_document(db, user, request.document_id)
+        context = vector_service.search_document(request.document_id, question)
+    answer = ask_legal_question(context, question)
+    db.add_all([
+        ChatMessage(user_id=user.id, document_id=request.document_id, role="user", content=question),
+        ChatMessage(user_id=user.id, document_id=request.document_id, role="assistant", content=answer),
+    ])
+    db.commit()
+    return {"answer": answer, "mode": "document" if request.document_id else "general"}
 
 
-# =============================
-# Health Check
-# =============================
+@app.get("/chat-history")
+def chat_history(document_id: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if document_id:
+        get_owned_document(db, user, document_id)
+    query = select(ChatMessage).where(ChatMessage.user_id == user.id)
+    query = query.where(ChatMessage.document_id == document_id) if document_id else query.where(ChatMessage.document_id.is_(None))
+    messages = db.scalars(query.order_by(ChatMessage.created_at.asc())).all()
+    return [{"id": item.id, "role": item.role, "content": item.content, "created_at": item.created_at} for item in messages]
+
 
 @app.get("/")
 def home():
-    return {
-        "message": "Lexi Brief API Running",
-        "version": "1.0",
-        "status": "healthy",
-    }
-
-
-# =============================
-# Local Run
-# =============================
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-    )
+    return {"message": "LexiBrief API Running", "version": "2.0", "status": "healthy"}
