@@ -173,10 +173,14 @@ const token = localStorage.getItem("lexibrief_token");
 const data = token
   ? await analyzeDocument(file)
   : await analyzeGuestDocument(file);
-      setProgress(100);
-      setActiveStep(ANALYSIS_STEPS.length - 1);
-      setAnalysis(data);
-      await refreshDocuments();
+
+setProgress(100);
+setActiveStep(ANALYSIS_STEPS.length - 1);
+setAnalysis(data);
+
+if (token) {
+  await refreshDocuments();
+}
 
       toast.success("Document analysed successfully!", {
         id: loadingToast,
