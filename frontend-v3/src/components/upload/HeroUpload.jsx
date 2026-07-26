@@ -9,9 +9,11 @@ import {
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useAnalysis } from "../../context/AnalysisContext";
-import { analyzeDocument } from "../../services/api";
 import { toast } from "sonner";
-
+import {
+  analyzeDocument,
+  analyzeGuestDocument,
+} from "../../services/api";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const ANALYSIS_STEPS = [
@@ -166,8 +168,11 @@ export default function HeroUpload() {
       setLoading(true);
       setAnalysis(null);
 
-      const data = await analyzeDocument(file);
+const token = localStorage.getItem("lexibrief_token");
 
+const data = token
+  ? await analyzeDocument(file)
+  : await analyzeGuestDocument(file);
       setProgress(100);
       setActiveStep(ANALYSIS_STEPS.length - 1);
       setAnalysis(data);
