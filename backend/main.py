@@ -47,6 +47,21 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 def user_payload(user: User) -> dict:
     return {"id": user.id, "full_name": user.full_name, "email": user.email, "created_at": user.created_at}
 
+def parse_stored_json(value, fallback):
+    if value is None:
+        return fallback
+
+    if isinstance(value, (list, dict)):
+        return value
+
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return fallback
+
+    return fallback
+
 
 def document_payload(document: Document, include_analysis: bool = True) -> dict:
     data = {
@@ -59,10 +74,25 @@ def document_payload(document: Document, include_analysis: bool = True) -> dict:
         "created_at": document.created_at,
         "updated_at": document.updated_at,
     }
-    if include_analysis:
-        data.update({"summary": document.summary, "clauses": document.clauses, "risks": document.risks})
-    return data
 
+    if include_analysis:
+        data.update({
+            "summary": document.summary,
+            "clauses": parse_stored_json(document.clauses, []),
+            "risks": parse_stored_json(
+                document.risks,
+                {
+                    "risk_score": 0,
+                    "risk_level": "Unknown",
+                    "high_risks": [],
+                    "medium_risks": [],
+                    "low_risks": [],
+                    "summary": "",
+                },
+            ),
+        })
+
+    return data
 
 def validate_pdf(file: UploadFile) -> None:
     if not file.filename:
@@ -200,7 +230,7 @@ async def full_analysis(file: UploadFile = File(...), user: User = Depends(get_c
         document = Document(
             id=doc_id, user_id=user.id, filename=file.filename, stored_path=prepared["path"],
             pages=prepared["pages"], chunks=len(prepared["chunks"]), text_preview=prepared["text"][:500],
-            summary=summary, clauses=clauses, risks=risks, status="analyzed",
+            summary=summary, clauses=json.dumps(clauses), risks=json.dumps(risks), status="analyzed",
         )
         db.add(document)
         db.commit()
@@ -294,7 +324,10 @@ async def analyze_document(request: AnalyzeRequest, user: User = Depends(get_cur
     result = await ai_service.analyze_document(get_analysis_context(document.id, queries[analysis_type]), analysis_type)
     if analysis_type == "risks":
         result = parse_risk_response(result)
-    setattr(document, analysis_type, result)
+    if analysis_type in {"clauses", "risks"}:
+     setattr(document, analysis_type, json.dumps(result))
+    else:
+     setattr(document, analysis_type, result)
     document.status = "analyzed"
     db.commit()
     return {"document_id": document.id, "analysis_type": analysis_type, "result": result}
