@@ -34,6 +34,7 @@ export default function AIChat() {
 
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [guestChatsRemaining, setGuestChatsRemaining] = useState(10);
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [messages, setMessages] = useState([
     {
@@ -89,46 +90,67 @@ export default function AIChat() {
     });
 
     try {
-      const response = await askLegalQuestion({
-        question,
-        documentId: analysis?.document_id || null,
-      });
+  const response = await askLegalQuestion({
+    question,
+    documentId: analysis?.document_id || null,
+  });
 
-      const answer =
-        response?.answer ||
-        response?.response ||
-        response?.result ||
-        response?.message ||
-        "I could not generate an answer for this question.";
+  // Update guest remaining chats
+  if (typeof response?.remaining === "number") {
+    setGuestChatsRemaining(response.remaining);
+  }
 
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        {
-          role: "ai",
-          text: answer,
-        },
-      ]);
-    } catch (error) {
-      console.error("Chat error:", error);
+  const answer =
+    response?.answer ||
+    response?.response ||
+    response?.result ||
+    response?.message ||
+    "I could not generate an answer for this question.";
 
-      const errorMessage =
-        error?.response?.data?.detail ||
-        error?.message ||
-        "Unable to get an answer from LexiBrief AI.";
+  setMessages((previousMessages) => [
+    ...previousMessages,
+    {
+      role: "ai",
+      text: answer,
+    },
+  ]);
+} catch (error) {
+  console.error("Chat error:", error);
 
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        {
-          role: "ai",
-          text: `I could not complete that request.\n\n${errorMessage}`,
-          isError: true,
-        },
-      ]);
+  if (error?.response?.status === 403) {
+    setGuestChatsRemaining(0);
 
-      toast.error("Unable to get an AI response");
-    } finally {
-      setLoading(false);
-    }
+    setMessages((previousMessages) => [
+      ...previousMessages,
+      {
+        role: "ai",
+        text: "You have used all 10 free AI chats. Please create a free account to continue.",
+        isError: true,
+      },
+    ]);
+
+    toast.error("Free AI chat limit reached");
+    return;
+  }
+
+  const errorMessage =
+    error?.response?.data?.detail ||
+    error?.message ||
+    "Unable to get an answer from LexiBrief AI.";
+
+  setMessages((previousMessages) => [
+    ...previousMessages,
+    {
+      role: "ai",
+      text: `I could not complete that request.\n\n${errorMessage}`,
+      isError: true,
+    },
+  ]);
+
+  toast.error("Unable to get an AI response");
+} finally {
+  setLoading(false);
+}
   };
 
   const copyResponse = async (text, index) => {
@@ -239,6 +261,11 @@ export default function AIChat() {
                   ? "Ask questions about the uploaded contract and receive document-aware legal explanations."
                   : "Ask general legal questions now, or upload a document for document-specific answers."}
               </p>
+              {!localStorage.getItem("lexibrief_token") && (
+  <div className="mt-3 inline-flex rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-sm text-indigo-300">
+    {guestChatsRemaining} / 10 Free AI Chats Remaining
+  </div>
+)}
             </div>
           </div>
 

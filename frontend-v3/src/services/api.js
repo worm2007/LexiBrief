@@ -52,9 +52,28 @@ export const askLegalQuestion = async ({
     throw new Error("Please enter a question.");
   }
 
-  const response = await api.post("/legal-chat", {
+  const token = localStorage.getItem("lexibrief_token");
+
+  if (token) {
+    const response = await api.post("/legal-chat", {
+      question: question.trim(),
+      document_id: documentId,
+    });
+
+    return response.data;
+  }
+
+  let sessionId = localStorage.getItem("lexibrief_guest_session");
+
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    localStorage.setItem("lexibrief_guest_session", sessionId);
+  }
+
+  const response = await api.post("/legal-chat-guest", {
     question: question.trim(),
     document_id: documentId,
+    session_id: sessionId,
   });
 
   return response.data;

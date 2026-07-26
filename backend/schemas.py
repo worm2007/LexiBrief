@@ -18,5 +18,11 @@ class AnalyzeRequest(BaseModel):
 
 
 class LegalChatRequest(BaseModel):
-    question: str
+    question: str = Field(min_length=1, max_length=4000)
     document_id: str | None = None
+
+
+class GuestLegalChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
+    document_id: str | None = None
+    session_id: str = Field(min_length=1, max_length=200)
